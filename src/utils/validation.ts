@@ -56,11 +56,19 @@ export const uploadFileSchema = z
 const PDF_SIGNATURE = [0x25, 0x50, 0x44, 0x46, 0x2d]; // %PDF-
 const ZIP_SIGNATURE = [0x50, 0x4b, 0x03, 0x04]; // DOCX is a zip container
 
+function startsWith(bytes: Uint8Array, signature: number[]): boolean {
+  return bytes.length >= signature.length && signature.every((byte, i) => bytes[i] === byte);
+}
+
+export function detectDocumentMime(bytes: Uint8Array): typeof PDF_MIME | typeof DOCX_MIME | null {
+  if (startsWith(bytes, PDF_SIGNATURE)) return PDF_MIME;
+  if (startsWith(bytes, ZIP_SIGNATURE)) return DOCX_MIME;
+  return null;
+}
+
 // The browser-supplied MIME type is client-controlled, so the leading bytes must agree with it.
 export function hasExpectedFileSignature(bytes: Uint8Array, mimeType: string): boolean {
-  const signature = mimeType === PDF_MIME ? PDF_SIGNATURE : mimeType === DOCX_MIME ? ZIP_SIGNATURE : null;
-  if (!signature || bytes.length < signature.length) return false;
-  return signature.every((byte, i) => bytes[i] === byte);
+  return detectDocumentMime(bytes) === mimeType;
 }
 
 const blockedIpv4 = new BlockList();

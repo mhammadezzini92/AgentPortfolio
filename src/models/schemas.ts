@@ -4,6 +4,7 @@ import {
   check,
   index,
   integer,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
@@ -30,6 +31,7 @@ export const PROCESSING_STATUSES = [
 ] as const;
 export const PROVENANCES = ["personal", "general", "unverified"] as const;
 export const ENTITY_TYPES = ["profile", "project", "experience"] as const;
+export const LLM_OPERATIONS = ["extraction", "answer"] as const;
 
 // Drizzle's SQLite enums are TypeScript-only; this makes the database reject unknown values too.
 // Values are compile-time constants, so inlining them as literals is safe.
@@ -40,6 +42,7 @@ export type SourceType = (typeof SOURCE_TYPES)[number];
 export type ProcessingStatus = (typeof PROCESSING_STATUSES)[number];
 export type Provenance = (typeof PROVENANCES)[number];
 export type EntityType = (typeof ENTITY_TYPES)[number];
+export type LlmOperation = (typeof LLM_OPERATIONS)[number];
 
 // Stored as unix seconds; Drizzle maps them to Date in app code.
 const createdAt = () =>
@@ -122,7 +125,7 @@ export const knowledgeSources = sqliteTable(
     uniqueIndex("knowledge_sources_content_hash_unique").on(table.contentHash),
     check("knowledge_sources_source_type_check", isOneOf(table.sourceType, SOURCE_TYPES)),
     check("knowledge_sources_status_check", isOneOf(table.status, PROCESSING_STATUSES)),
-    index("knowledge_sources_source_url_idx").on(table.sourceUrl),
+    uniqueIndex("knowledge_sources_source_url_unique").on(table.sourceUrl),
   ],
 );
 
@@ -159,6 +162,8 @@ export const sourceRelationships = sqliteTable(
       .references(() => knowledgeSources.id, { onDelete: "cascade" }),
     entityType: text("entity_type", { enum: ENTITY_TYPES }).notNull(),
     entityId: integer("entity_id").notNull(),
+    // Verbatim quote from the source backing this entity, kept for traceability.
+    evidence: text("evidence"),
     createdAt: createdAt(),
   },
   (table) => [
@@ -187,6 +192,32 @@ export const ingestionJobs = sqliteTable(
   ],
 );
 
+// cost_usd is what OpenRouter billed for the request, so no local price table is needed.
+// Null when the provider didn't report it; the dashboard falls back to token counts.
+export const llmUsage = sqliteTable(
+  "llm_usage",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    operation: text("operation", { enum: LLM_OPERATIONS }).notNull(),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens").notNull(),
+    outputTokens: integer("output_tokens").notNull(),
+    costUsd: real("cost_usd"),
+    sourceId: integer("source_id").references(() => knowledgeSources.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index("llm_usage_created_at_idx").on(table.createdAt),
+    check("llm_usage_operation_check", isOneOf(table.operation, LLM_OPERATIONS)),
+  ],
+);
+
+export const rateLimits = sqliteTable("rate_limits", {
+  key: text("key").primaryKey(),
+  windowStart: integer("window_start").notNull(),
+  count: integer("count").notNull(),
+});
+
 export type Profile = typeof profile.$inferSelect;
 export type NewProfile = typeof profile.$inferInsert;
 export type Project = typeof projects.$inferSelect;
@@ -201,3 +232,5 @@ export type SourceRelationship = typeof sourceRelationships.$inferSelect;
 export type NewSourceRelationship = typeof sourceRelationships.$inferInsert;
 export type IngestionJob = typeof ingestionJobs.$inferSelect;
 export type NewIngestionJob = typeof ingestionJobs.$inferInsert;
+export type LlmUsage = typeof llmUsage.$inferSelect;
+export type NewLlmUsage = typeof llmUsage.$inferInsert;

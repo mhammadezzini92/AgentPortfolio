@@ -1,0 +1,93 @@
+import type { NewExperience, NewProfile, NewProject } from "@/models/schemas";
+import type {
+  ExtractedExperience,
+  ExtractedProfile,
+  ExtractedProject,
+} from "@/services/llm/extraction-schema";
+import type { ContactInformation, Education, Language } from "@/utils/validation";
+import { normalizeForMatch } from "@/utils/text";
+
+// Merge policy (agreed in the Phase 2 plan): a non-null value from the newer source
+// overwrites the stored one; arrays are unioned so no source can erase another's facts.
+
+function pick<T>(incoming: T | null | undefined, existing: T | null | undefined): T | null {
+  return incoming ?? existing ?? null;
+}
+
+function unionBy<T>(existing: T[], incoming: T[], key: (item: T) => string): T[] {
+  const merged = new Map<string, T>();
+  for (const item of existing) merged.set(key(item), item);
+  for (const item of incoming) {
+    const itemKey = key(item);
+    if (!merged.has(itemKey)) merged.set(itemKey, item);
+  }
+  return [...merged.values()];
+}
+
+export const unionStrings = (existing: string[], incoming: string[]) =>
+  unionBy(
+    existing,
+    incoming.map((value) => value.trim()).filter(Boolean),
+    normalizeForMatch,
+  );
+
+export const projectKey = (name: string) => normalizeForMatch(name);
+export const experienceKey = (company: string, position: string) =>
+  `${normalizeForMatch(company)}\u0000${normalizeForMatch(position)}`;
+
+function withoutNulls<T extends Record<string, unknown>>(value: T): Partial<{ [K in keyof T]: NonNullable<T[K]> }> {
+  return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== null)) as Partial<{
+    [K in keyof T]: NonNullable<T[K]>;
+  }>;
+}
+
+// Returns null when there's no stored profile and the source didn't name the owner:
+// full_name is required and a nameless profile row is worse than none.
+export function mergeProfile(existing: NewProfile | undefined, incoming: ExtractedProfile): NewProfile | null {
+  const fullName = pick(incoming.fullName, existing?.fullName);
+  if (!fullName) return null;
+
+  const languages: Language[] = incoming.languages.map((language) => withoutNulls(language) as Language);
+  const education: Education[] = incoming.education.map((entry) => withoutNulls(entry) as Education);
+  const contact = withoutNulls(incoming.contactInformation) as ContactInformation;
+
+  return {
+    id: 1,
+    fullName,
+    title: pick(incoming.title, existing?.title),
+    professionalSummary: pick(incoming.professionalSummary, existing?.professionalSummary),
+    location: pick(incoming.location, existing?.location),
+    skills: unionStrings(existing?.skills ?? [], incoming.skills),
+    languages: unionBy(existing?.languages ?? [], languages, (l) => normalizeForMatch(l.name)),
+    education: unionBy(existing?.education ?? [], education, (e) =>
+      `${normalizeForMatch(e.institution)}\u0000${normalizeForMatch(e.degree ?? "")}`,
+    ),
+    contactInformation: { ...(existing?.contactInformation ?? {}), ...contact },
+  };
+}
+
+export function mergeProject(existing: NewProject | undefined, incoming: ExtractedProject): NewProject {
+  return {
+    name: existing?.name ?? incoming.name.trim(),
+    description: pick(incoming.description, existing?.description),
+    role: pick(incoming.role, existing?.role),
+    architecture: pick(incoming.architecture, existing?.architecture),
+    technologies: unionStrings(existing?.technologies ?? [], incoming.technologies),
+    challenges: pick(incoming.challenges, existing?.challenges),
+    solutions: pick(incoming.solutions, existing?.solutions),
+    achievements: pick(incoming.achievements, existing?.achievements),
+  };
+}
+
+export function mergeExperience(existing: NewExperience | undefined, incoming: ExtractedExperience): NewExperience {
+  return {
+    company: existing?.company ?? incoming.company.trim(),
+    position: existing?.position ?? incoming.position.trim(),
+    description: pick(incoming.description, existing?.description),
+    responsibilities: unionStrings(existing?.responsibilities ?? [], incoming.responsibilities),
+    technologies: unionStrings(existing?.technologies ?? [], incoming.technologies),
+    startDate: pick(incoming.startDate, existing?.startDate),
+    // A null end date means "current", so it only overwrites when the source has a date.
+    endDate: pick(incoming.endDate, existing?.endDate),
+  };
+}

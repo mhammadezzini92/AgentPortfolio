@@ -17,10 +17,15 @@ const authSchema = z.object({
   AUTH_SECRET: z.string().min(32, "AUTH_SECRET must be at least 32 characters"),
 });
 
-const openaiSchema = z.object({
-  OPENAI_API_KEY: z.string().min(1),
-  OPENAI_EXTRACTION_MODEL: z.string().min(1).default("gpt-4o-mini"),
-  OPENAI_ANSWER_MODEL: z.string().min(1).default("gpt-4o-mini"),
+// OpenRouter ids are "vendor/model"; a bare "gpt-4o-mini" fails at request time, so catch it at boot.
+const openRouterModel = z
+  .string()
+  .regex(/^[\w.-]+\/[\w.:-]+$/, 'OpenRouter model ids look like "openai/gpt-4o-mini"');
+
+const openRouterSchema = z.object({
+  OPENROUTER_API_KEY: z.string().min(1),
+  OPENROUTER_EXTRACTION_MODEL: openRouterModel.default("openai/gpt-4o-mini"),
+  OPENROUTER_ANSWER_MODEL: openRouterModel.default("openai/gpt-4o-mini"),
   EXTRACTION_MAX_OUTPUT_TOKENS: positiveInt(4000),
 });
 
@@ -30,7 +35,7 @@ const chatSchema = z.object({
   RETRIEVAL_TOP_K: positiveInt(8),
 });
 
-// Each consumer loads only its own section, so a missing OpenAI key
+// Each consumer loads only its own section, so a missing OpenRouter key
 // doesn't break auth or the database during local work.
 function load<T extends z.ZodType>(schema: T, section: string): z.infer<T> {
   const parsed = schema.safeParse(process.env);
@@ -43,5 +48,5 @@ function load<T extends z.ZodType>(schema: T, section: string): z.infer<T> {
 export const databaseEnv = () => load(databaseSchema, "database");
 export const blobEnv = () => load(blobSchema, "blob");
 export const authEnv = () => load(authSchema, "auth");
-export const openaiEnv = () => load(openaiSchema, "OpenAI");
+export const openRouterEnv = () => load(openRouterSchema, "OpenRouter");
 export const chatEnv = () => load(chatSchema, "chat");
