@@ -29,6 +29,13 @@
       "when": 1793401357326,
       "tag": "0003_llm_usage_cost",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793442572932,
+      "tag": "0004_manual_edits",
+      "breakpoints": true
     }
   ]
 }

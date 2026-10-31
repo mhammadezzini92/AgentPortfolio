@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, inArray, notExists } from "drizzle-orm";
+import { and, eq, inArray, isNull, notExists } from "drizzle-orm";
 import { type DbExecutor, type Transaction, db } from "@/lib/db";
 import {
   type EntityType,
@@ -73,6 +73,7 @@ const ENTITY_TABLES = { profile, project: projects, experience: experiences } as
 
 // Deletes candidates that no source supports any more. Entities still linked to another
 // source are kept, which is how facts confirmed elsewhere survive a source deletion.
+// Hand-edited entities are the admin's own statement and need no source to survive.
 export async function deleteUnsupportedEntities(
   tx: Transaction,
   candidates: Pick<SourceRelationship, "entityType" | "entityId">[],
@@ -85,6 +86,7 @@ export async function deleteUnsupportedEntities(
     await tx.delete(table).where(
       and(
         inArray(table.id, ids),
+        isNull(table.manuallyEditedAt),
         notExists(
           tx
             .select({ id: sourceRelationships.id })

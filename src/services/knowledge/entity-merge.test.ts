@@ -95,3 +95,46 @@ describe("mergeProfile", () => {
     expect(merged?.languages).toEqual([{ name: "English", proficiency: "Native" }, { name: "Arabic" }]);
   });
 });
+
+describe("merging into hand-edited rows", () => {
+  const editedAt = new Date("2026-10-01T00:00:00Z");
+
+  it("keeps edited project values, fills only empty fields and doesn't union lists", () => {
+    const merged = mergeProject(
+      { name: "Ledger", description: "Mine", role: null, technologies: ["Go"], manuallyEditedAt: editedAt },
+      extractedProject({ description: "Extracted", role: "Lead", technologies: ["Go", "Kafka"] }),
+    );
+    expect(merged).toMatchObject({ description: "Mine", role: "Lead", technologies: ["Go"] });
+  });
+
+  it("fills an edited row's empty list from the source", () => {
+    const merged = mergeProject({ name: "Ledger", technologies: [], manuallyEditedAt: editedAt }, extractedProject({ technologies: ["Kafka"] }));
+    expect(merged.technologies).toEqual(["Kafka"]);
+  });
+
+  it("keeps an edited experience's null end date instead of taking the source's", () => {
+    const merged = mergeExperience(
+      { company: "Acme", position: "Engineer", endDate: null, manuallyEditedAt: editedAt },
+      { company: "Acme", position: "Engineer", description: null, responsibilities: [], technologies: [], startDate: "2020", endDate: "2023", evidence: "Acme" },
+    );
+    expect(merged).toMatchObject({ startDate: "2020", endDate: null });
+  });
+
+  it("keeps edited profile fields and contact values over extracted ones", () => {
+    const merged = mergeProfile(
+      { id: 1, fullName: "Jane D.", title: null, skills: ["Go"], contactInformation: { email: "me@jane.dev" }, manuallyEditedAt: editedAt },
+      extractedProfile({
+        fullName: "Jane Doe",
+        title: "Engineer",
+        skills: ["Rust"],
+        contactInformation: { email: "old@jane.dev", phone: "123", website: null, linkedin: null, github: null },
+      }),
+    );
+    expect(merged).toMatchObject({
+      fullName: "Jane D.",
+      title: "Engineer",
+      skills: ["Go"],
+      contactInformation: { email: "me@jane.dev", phone: "123" },
+    });
+  });
+});

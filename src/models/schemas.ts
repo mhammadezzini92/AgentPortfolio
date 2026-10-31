@@ -58,6 +58,10 @@ const updatedAt = () =>
     .default(sql`(unixepoch())`)
     .$onUpdate(() => new Date());
 
+// Set when an admin edits or creates the row by hand. Ingestion then treats the row as
+// authoritative: it only fills empty fields and never deletes the row as unsupported.
+const manuallyEditedAt = () => integer("manually_edited_at", { mode: "timestamp" });
+
 export const profile = sqliteTable(
   "profile",
   {
@@ -73,6 +77,7 @@ export const profile = sqliteTable(
       .$type<ContactInformation>()
       .notNull()
       .default({}),
+    manuallyEditedAt: manuallyEditedAt(),
     updatedAt: updatedAt(),
   },
   (table) => [check("profile_single_row", sql`${table.id} = 1`)],
@@ -88,6 +93,7 @@ export const projects = sqliteTable("projects", {
   challenges: text("challenges"),
   solutions: text("solutions"),
   achievements: text("achievements"),
+  manuallyEditedAt: manuallyEditedAt(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -102,6 +108,7 @@ export const experiences = sqliteTable("experiences", {
   // CVs rarely give day precision, so dates are "YYYY" or "YYYY-MM". A null end_date means current.
   startDate: text("start_date"),
   endDate: text("end_date"),
+  manuallyEditedAt: manuallyEditedAt(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

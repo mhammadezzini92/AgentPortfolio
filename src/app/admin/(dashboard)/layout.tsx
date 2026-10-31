@@ -7,6 +7,7 @@ const NAV = [
   { href: "/admin", label: "Sources" },
   { href: "/admin/knowledge", label: "Knowledge" },
   { href: "/admin/search", label: "Search" },
+  { href: "/admin/data", label: "Data" },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
