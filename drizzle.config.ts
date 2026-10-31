@@ -12,6 +12,7 @@ export default defineConfig({
   dialect: "turso",
   dbCredentials: {
     url,
-    authToken: process.env.TURSO_AUTH_TOKEN,
+    // A blank "TURSO_AUTH_TOKEN=" line arrives as "", which drizzle-kit rejects; local files need none.
+    authToken: process.env.TURSO_AUTH_TOKEN || undefined,
   },
 });

@@ -11,6 +11,7 @@ import {
   type Project,
   type SourceRelationship,
   experiences,
+  knowledgeSources,
   profile,
   projects,
   sourceRelationships,
@@ -95,15 +96,35 @@ export async function deleteUnsupportedEntities(
   }
 }
 
+export type EntitySourceLink = { sourceId: number; sourceTitle: string | null; sourceUrl: string | null; evidence: string | null };
+
+// entityId → the sources that support it, with the evidence quote from each.
+export async function listEntitySourceLinks(entityType: EntityType): Promise<Map<number, EntitySourceLink[]>> {
+  const rows = await db
+    .select({
+      entityId: sourceRelationships.entityId,
+      sourceId: sourceRelationships.sourceId,
+      evidence: sourceRelationships.evidence,
+      sourceTitle: knowledgeSources.title,
+      sourceUrl: knowledgeSources.sourceUrl,
+    })
+    .from(sourceRelationships)
+    .innerJoin(knowledgeSources, eq(knowledgeSources.id, sourceRelationships.sourceId))
+    .where(eq(sourceRelationships.entityType, entityType));
+
+  const byEntity = new Map<number, EntitySourceLink[]>();
+  for (const { entityId, ...link } of rows) {
+    byEntity.set(entityId, [...(byEntity.get(entityId) ?? []), link]);
+  }
+  return byEntity;
+}
+
 export async function listProjectsWithSources() {
-  const [allProjects, links] = await Promise.all([
-    db.select().from(projects),
-    db.select().from(sourceRelationships).where(eq(sourceRelationships.entityType, "project")),
-  ]);
-  return allProjects.map((project) => ({
-    ...project,
-    sources: links
-      .filter((link) => link.entityId === project.id)
-      .map((link) => ({ sourceId: link.sourceId, evidence: link.evidence })),
-  }));
+  const [allProjects, links] = await Promise.all([db.select().from(projects), listEntitySourceLinks("project")]);
+  return allProjects.map((project) => ({ ...project, sources: links.get(project.id) ?? [] }));
+}
+
+export async function listExperiencesWithSources() {
+  const [allExperiences, links] = await Promise.all([db.select().from(experiences), listEntitySourceLinks("experience")]);
+  return allExperiences.map((experience) => ({ ...experience, sources: links.get(experience.id) ?? [] }));
 }

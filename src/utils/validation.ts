@@ -41,7 +41,11 @@ export type Language = z.infer<typeof languageSchema>;
 export type Education = z.infer<typeof educationSchema>;
 export type ContactInformation = z.infer<typeof contactInformationSchema>;
 
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+// Vercel rejects function request bodies over 4.5MB, so the cap sits below that.
+// Vercel rejects function request bodies over 4.5MB; local dev has no such cap, so image-heavy
+// CVs can be tested there. Keep next.config.ts proxyClientMaxBodySize above the larger value.
+export const MAX_UPLOAD_MB = process.env.NODE_ENV === "development" ? 25 : 4;
+export const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
 
 export const PDF_MIME = "application/pdf";
 export const DOCX_MIME =
@@ -50,7 +54,7 @@ export const DOCX_MIME =
 export const uploadFileSchema = z
   .file()
   .min(1, "File is empty")
-  .max(MAX_UPLOAD_BYTES, "File exceeds 10MB")
+  .max(MAX_UPLOAD_BYTES, `File exceeds ${MAX_UPLOAD_MB}MB`)
   .mime([PDF_MIME, DOCX_MIME]);
 
 const PDF_SIGNATURE = [0x25, 0x50, 0x44, 0x46, 0x2d]; // %PDF-

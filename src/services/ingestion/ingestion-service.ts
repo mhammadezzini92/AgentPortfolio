@@ -75,7 +75,7 @@ export async function createUrlSource(url: URL, sourceType: SourceType, title: s
     return await insertSource({ sourceType, sourceUrl: canonical.toString(), title });
   } catch (error) {
     if (isUniqueViolation(error, "knowledge_sources.source_url")) {
-      throw new DuplicateSourceError(null, `A source for ${url} already exists; reprocess it instead`);
+      throw new DuplicateSourceError(null, `A source for ${canonical} already exists; reprocess it instead`);
     }
     throw error;
   }

@@ -1,7 +1,11 @@
 import "server-only";
-import { eq } from "drizzle-orm";
-import type { Transaction } from "@/lib/db";
-import { type NewKnowledgeChunk, knowledgeChunks } from "@/models/schemas";
+import { asc, eq } from "drizzle-orm";
+import { type Transaction, db } from "@/lib/db";
+import { type KnowledgeChunk, type NewKnowledgeChunk, knowledgeChunks } from "@/models/schemas";
+
+export async function listChunksForSource(sourceId: number): Promise<KnowledgeChunk[]> {
+  return db.select().from(knowledgeChunks).where(eq(knowledgeChunks.sourceId, sourceId)).orderBy(asc(knowledgeChunks.chunkIndex));
+}
 
 // Keeps each INSERT well under SQLite's bound-parameter limit (10 columns per row).
 const INSERT_BATCH_SIZE = 100;

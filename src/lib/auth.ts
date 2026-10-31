@@ -1,6 +1,8 @@
 import "server-only";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { authEnv } from "@/lib/env";
 
 export const SESSION_COOKIE_NAME = "admin_session";
@@ -43,6 +45,20 @@ export function isValidSessionToken(token: string | undefined, nowMs = Date.now(
 export async function hasAdminSession(): Promise<boolean> {
   const cookieStore = await cookies();
   return isValidSessionToken(cookieStore.get(SESSION_COOKIE_NAME)?.value);
+}
+
+// For admin server components. connection() defers the render to request time: with
+// cacheComponents, cookies can be available while prerendering, so cookies() alone doesn't,
+// and the expiry check (Date.now) and database reads must never run at build time.
+export async function requireAdminSession(): Promise<void> {
+  await connection();
+  if (!(await hasAdminSession())) redirect("/admin/login");
+}
+
+// Only same-app admin paths, so the login form can't be used as an open redirect.
+export function safeAdminRedirect(next: string | null): string {
+  if (!next || !next.startsWith("/admin") || next.startsWith("//") || next.startsWith("/admin/login")) return "/admin";
+  return next;
 }
 
 export const sessionCookieOptions = {

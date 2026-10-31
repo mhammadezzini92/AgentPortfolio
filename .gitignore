@@ -34,6 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# local upload storage (dev fallback when no Blob token is set)
+/.uploads/
+
 # local libSQL databases
 *.db
 *.db-shm

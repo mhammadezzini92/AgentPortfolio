@@ -33,12 +33,17 @@ const chatSchema = z.object({
   CHAT_MAX_INPUT_CHARS: positiveInt(1000),
   CHAT_MAX_OUTPUT_TOKENS: positiveInt(600),
   RETRIEVAL_TOP_K: positiveInt(8),
+  // Caps the retrieved text sent to the answer model, which keeps per-question cost predictable.
+  RETRIEVAL_MAX_CONTEXT_CHARS: positiveInt(6000),
 });
 
 // Each consumer loads only its own section, so a missing OpenRouter key
 // doesn't break auth or the database during local work.
+// Blank lines in .env ("KEY=") arrive as "", which should mean "unset" so optional
+// values stay undefined and defaults apply.
 function load<T extends z.ZodType>(schema: T, section: string): z.infer<T> {
-  const parsed = schema.safeParse(process.env);
+  const defined = Object.fromEntries(Object.entries(process.env).filter(([, value]) => value !== ""));
+  const parsed = schema.safeParse(defined);
   if (!parsed.success) {
     throw new Error(`Invalid ${section} environment:\n${z.prettifyError(parsed.error)}`);
   }

@@ -55,7 +55,7 @@ describe("upload guards", () => {
 
   it("rejects disallowed types and oversized files", () => {
     expect(uploadFileSchema.safeParse(new File(["x"], "a.exe", { type: "application/x-msdownload" })).success).toBe(false);
-    expect(uploadFileSchema.safeParse(new File([new Uint8Array(10 * 1024 * 1024 + 1)], "a.pdf", { type: PDF_MIME })).success).toBe(false);
+    expect(uploadFileSchema.safeParse(new File([new Uint8Array(4 * 1024 * 1024 + 1)], "a.pdf", { type: PDF_MIME })).success).toBe(false);
     expect(uploadFileSchema.safeParse(new File(["%PDF-"], "a.pdf", { type: PDF_MIME })).success).toBe(true);
   });
 });
