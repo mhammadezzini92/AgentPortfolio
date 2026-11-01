@@ -17,6 +17,7 @@ const MAX_REDIRECTS = 3;
 const TIMEOUT_MS = 15_000;
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
 const MAX_ROBOTS_BYTES = 512 * 1024;
+const MAX_SCRIPT_BYTES = 1024 * 1024;
 
 const DOCUMENT_CONTENT_TYPES = [
   "text/html",
@@ -26,7 +27,12 @@ const DOCUMENT_CONTENT_TYPES = [
   "application/pdf",
 ];
 
+const SCRIPT_CONTENT_TYPES = ["application/javascript", "text/javascript", "application/x-javascript", "application/ecmascript"];
+
 export type FetchedDocument = { finalUrl: URL; contentType: string; body: Buffer };
+
+// robots.txt per origin, shared by every fetch belonging to one import (a page and its scripts).
+export type RobotsCache = Map<string, RobotsPolicy>;
 
 type RawResponse = { status: number; location: string | null; contentType: string; body: Buffer };
 
@@ -138,23 +144,27 @@ async function loadRobotsPolicy(origin: URL): Promise<RobotsPolicy> {
   }
 }
 
-export async function fetchPublicDocument(rawUrl: string): Promise<FetchedDocument> {
+async function fetchPublicResource(
+  rawUrl: string,
+  allowedTypes: string[],
+  maxBytes: number,
+  robotsCache: RobotsCache,
+): Promise<FetchedDocument> {
   const parsed = publicHttpUrlSchema.safeParse(rawUrl);
   if (!parsed.success) throw new FetchBlockedError(`URL is not allowed: ${rawUrl}`);
 
-  const robotsByOrigin = new Map<string, RobotsPolicy>();
   const assertCrawlable = async (url: URL) => {
-    let policy = robotsByOrigin.get(url.origin);
+    let policy = robotsCache.get(url.origin);
     if (!policy) {
       policy = await loadRobotsPolicy(url);
-      robotsByOrigin.set(url.origin, policy);
+      robotsCache.set(url.origin, policy);
     }
     if (!isPathAllowed(policy, url.pathname + url.search)) {
       throw new FetchBlockedError(`robots.txt disallows fetching ${url}`);
     }
   };
 
-  const response = await followRedirects(parsed.data, DOCUMENT_CONTENT_TYPES, MAX_BODY_BYTES, assertCrawlable);
+  const response = await followRedirects(parsed.data, allowedTypes, maxBytes, assertCrawlable);
   if (response.status === 401 || response.status === 402 || response.status === 403) {
     throw new FetchBlockedError(`${response.finalUrl} requires authentication or payment (HTTP ${response.status})`);
   }
@@ -162,4 +172,13 @@ export async function fetchPublicDocument(rawUrl: string): Promise<FetchedDocume
     throw new Error(`Fetching ${response.finalUrl} failed with HTTP ${response.status}`);
   }
   return { finalUrl: response.finalUrl, contentType: response.contentType, body: response.body };
+}
+
+export function fetchPublicDocument(rawUrl: string, robotsCache: RobotsCache = new Map()): Promise<FetchedDocument> {
+  return fetchPublicResource(rawUrl, DOCUMENT_CONTENT_TYPES, MAX_BODY_BYTES, robotsCache);
+}
+
+export async function fetchPublicScript(rawUrl: string, robotsCache: RobotsCache = new Map()): Promise<string> {
+  const fetched = await fetchPublicResource(rawUrl, SCRIPT_CONTENT_TYPES, MAX_SCRIPT_BYTES, robotsCache);
+  return fetched.body.toString("utf-8");
 }

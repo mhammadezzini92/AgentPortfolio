@@ -36,6 +36,13 @@
       "when": 1793442572932,
       "tag": "0004_manual_edits",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1793449210230,
+      "tag": "0005_chat_questions",
+      "breakpoints": true
     }
   ]
 }

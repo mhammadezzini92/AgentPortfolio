@@ -11,6 +11,12 @@ export const DEFAULT_PROVENANCE: Record<SourceType, Provenance> = {
   documentation: "general",
 };
 
+// The owner's own CV, portfolio and GitHub define their profile. Other uploads (cover
+// letters, notes) may fill gaps but must never overwrite what those sources say.
+export function sourceTypeOverwritesFacts(sourceType: SourceType): boolean {
+  return sourceType === "cv" || sourceType === "portfolio" || sourceType === "github";
+}
+
 // Articles and docs describe technology in general; entities extracted from them would
 // put general practices into the owner's profile, which the provenance rule forbids.
 export function sourceTypeYieldsEntities(sourceType: SourceType): boolean {

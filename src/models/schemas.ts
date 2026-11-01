@@ -32,6 +32,7 @@ export const PROCESSING_STATUSES = [
 export const PROVENANCES = ["personal", "general", "unverified"] as const;
 export const ENTITY_TYPES = ["profile", "project", "experience"] as const;
 export const LLM_OPERATIONS = ["extraction", "answer"] as const;
+export const CHAT_OUTCOMES = ["answered", "no_context", "failed"] as const;
 
 // Drizzle's SQLite enums are TypeScript-only; this makes the database reject unknown values too.
 // Values are compile-time constants, so inlining them as literals is safe.
@@ -43,6 +44,7 @@ export type ProcessingStatus = (typeof PROCESSING_STATUSES)[number];
 export type Provenance = (typeof PROVENANCES)[number];
 export type EntityType = (typeof ENTITY_TYPES)[number];
 export type LlmOperation = (typeof LLM_OPERATIONS)[number];
+export type ChatOutcome = (typeof CHAT_OUTCOMES)[number];
 
 // Stored as unix seconds; Drizzle maps them to Date in app code.
 const createdAt = () =>
@@ -219,6 +221,26 @@ export const llmUsage = sqliteTable(
   ],
 );
 
+// Visitor questions, kept 30 days so the admin can see what the agent couldn't answer.
+// No IP or other visitor identifiers are stored. outcome "no_context" means the model was
+// skipped because nothing matched; a zero retrieved_chunk_count flags likely gaps.
+export const chatQuestions = sqliteTable(
+  "chat_questions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    question: text("question").notNull(),
+    retrievedChunkCount: integer("retrieved_chunk_count").notNull(),
+    outcome: text("outcome", { enum: CHAT_OUTCOMES }).notNull(),
+    llmUsageId: integer("llm_usage_id").references(() => llmUsage.id, { onDelete: "set null" }),
+    latencyMs: integer("latency_ms").notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index("chat_questions_created_at_idx").on(table.createdAt),
+    check("chat_questions_outcome_check", isOneOf(table.outcome, CHAT_OUTCOMES)),
+  ],
+);
+
 export const rateLimits = sqliteTable("rate_limits", {
   key: text("key").primaryKey(),
   windowStart: integer("window_start").notNull(),
@@ -241,3 +263,5 @@ export type IngestionJob = typeof ingestionJobs.$inferSelect;
 export type NewIngestionJob = typeof ingestionJobs.$inferInsert;
 export type LlmUsage = typeof llmUsage.$inferSelect;
 export type NewLlmUsage = typeof llmUsage.$inferInsert;
+export type ChatQuestion = typeof chatQuestions.$inferSelect;
+export type NewChatQuestion = typeof chatQuestions.$inferInsert;

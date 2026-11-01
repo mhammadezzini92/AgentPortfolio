@@ -3,9 +3,10 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { type NewLlmUsage, llmUsage } from "@/models/schemas";
 
-export async function recordLlmUsage(usage: NewLlmUsage): Promise<void> {
+export async function recordLlmUsage(usage: NewLlmUsage): Promise<number> {
   try {
-    await db.insert(llmUsage).values(usage);
+    const [inserted] = await db.insert(llmUsage).values(usage).returning({ id: llmUsage.id });
+    return inserted.id;
   } catch (error) {
     throw new Error(`Failed to record ${usage.operation} usage`, { cause: error });
   }

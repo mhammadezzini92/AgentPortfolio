@@ -45,6 +45,17 @@ describe("chunkDocument", () => {
     expect(new Set(words)).toEqual(new Set(["alpha", "beta", "gamma", "delta"]));
   });
 
+  it("cuts a wrapped bullet list from a PDF at bullet starts, not mid-bullet", () => {
+    const bullet = (n: number) => `• Bullet ${n} describes the work done in some detail and keeps going\nonto a wrapped second line before it ends.`;
+    const text = ["Role at Company | 2020 - 2024", ...Array.from({ length: 12 }, (_, i) => bullet(i + 1))].join("\n");
+
+    const chunks = chunkDocument(text, 400);
+
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks.slice(1)) expect(chunk.content.startsWith("• Bullet")).toBe(true);
+    for (const chunk of chunks) expect(chunk.content.endsWith("before it ends.")).toBe(true);
+  });
+
   it("skips headings with no body", () => {
     const chunks = chunkDocument("# Empty\n\n# Full\n\nContent");
     expect(chunks).toHaveLength(1);

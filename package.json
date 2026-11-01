@@ -17,6 +17,7 @@
     "@libsql/client": "^0.18.0",
     "@mozilla/readability": "^0.6.0",
     "@vercel/blob": "^2.8.2",
+    "acorn": "^8.19.0",
     "drizzle-orm": "^0.45.4",
     "linkedom": "^0.18.14",
     "mammoth": "^1.13.0",

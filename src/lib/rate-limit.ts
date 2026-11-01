@@ -21,6 +21,18 @@ export async function consumeRateLimit(key: string, limit: number, windowSeconds
   return { allowed, retryAfterSeconds: allowed ? 0 : Math.max(1, row.window_start + windowSeconds - now) };
 }
 
+// Windows are at most a day long, so anything older than two days is dead weight.
+const RATE_LIMIT_RETENTION_SECONDS = 2 * 24 * 60 * 60;
+
+export async function deleteExpiredRateLimits(): Promise<void> {
+  const cutoff = Math.floor(Date.now() / 1000) - RATE_LIMIT_RETENTION_SECONDS;
+  try {
+    await db.run(sql`delete from rate_limits where window_start < ${cutoff}`);
+  } catch (error) {
+    throw new Error("Failed to delete expired rate limits", { cause: error });
+  }
+}
+
 // Vercel sets x-forwarded-for itself (client IP first) and strips spoofed values.
 export function clientIp(request: Request): string {
   return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";

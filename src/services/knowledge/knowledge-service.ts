@@ -2,12 +2,13 @@ import "server-only";
 import { db, type Transaction } from "@/lib/db";
 import { deleteSourceFile } from "@/lib/blob";
 import { logger } from "@/lib/logger";
-import type { EntityType, KnowledgeSource, NewExperience, NewKnowledgeChunk, NewProject } from "@/models/schemas";
+import type { EntityType, KnowledgeSource, NewExperience, NewKnowledgeChunk, NewProject, SourceType } from "@/models/schemas";
 import type { DocumentChunk } from "@/services/ingestion/chunker";
 import type { KnowledgeExtraction } from "@/services/llm/extraction-schema";
 import { replaceSourceChunks } from "@/services/knowledge/chunk-repository";
 import {
   experienceKey,
+  findSameEngagement,
   mergeExperience,
   mergeProfile,
   mergeProject,
@@ -25,18 +26,19 @@ import {
   upsertProfile,
 } from "@/services/knowledge/entity-repository";
 import { completeJob } from "@/services/knowledge/job-repository";
-import { DEFAULT_PROVENANCE } from "@/services/knowledge/provenance";
+import { DEFAULT_PROVENANCE, sourceTypeOverwritesFacts } from "@/services/knowledge/provenance";
 import { deleteIdleSource, findSourceById, setSourceStatus } from "@/services/knowledge/source-repository";
 import { sha256Hex } from "@/utils/text";
 
 type EntityLink = { entityType: EntityType; entityId: number; evidence: string };
 
-async function mergeEntities(tx: Transaction, extraction: KnowledgeExtraction) {
+async function mergeEntities(tx: Transaction, extraction: KnowledgeExtraction, sourceType: SourceType) {
   const links: EntityLink[] = [];
   const projectIdsByKey = new Map<string, number>();
+  const options = { fillOnly: !sourceTypeOverwritesFacts(sourceType) };
 
   if (extraction.profile) {
-    const merged = mergeProfile(await getProfile(tx), extraction.profile);
+    const merged = mergeProfile(await getProfile(tx), extraction.profile, options);
     if (merged) {
       await upsertProfile(tx, merged);
       links.push({ entityType: "profile", entityId: 1, evidence: extraction.profile.evidence });
@@ -47,7 +49,7 @@ async function mergeEntities(tx: Transaction, extraction: KnowledgeExtraction) {
   for (const incoming of extraction.projects) {
     const key = projectKey(incoming.name);
     const existing = storedProjects.get(key);
-    const merged = mergeProject(existing, incoming);
+    const merged = mergeProject(existing, incoming, options);
     const id = await saveProject(tx, existing?.id, merged);
     // The model can list the same project twice; later mentions merge into the first.
     storedProjects.set(key, { ...merged, id });
@@ -60,10 +62,12 @@ async function mergeEntities(tx: Transaction, extraction: KnowledgeExtraction) {
   );
   for (const incoming of extraction.experiences) {
     const key = experienceKey(incoming.company, incoming.position);
-    const existing = storedExperiences.get(key);
-    const merged = mergeExperience(existing, incoming);
+    const existing = storedExperiences.get(key) ?? findSameEngagement(storedExperiences.values(), incoming);
+    const merged = mergeExperience(existing, incoming, options);
     const id = await saveExperience(tx, existing?.id, merged);
+    // Registered under both titles, so later mentions of either merge into this row.
     storedExperiences.set(key, { ...merged, id });
+    storedExperiences.set(experienceKey(merged.company, merged.position), { ...merged, id });
     links.push({ entityType: "experience", entityId: id, evidence: incoming.evidence });
   }
 
@@ -106,7 +110,7 @@ type PersistInput = {
 export async function persistIngestion(input: PersistInput): Promise<void> {
   await db.transaction(async (tx) => {
     const previousLinks = await listRelationshipsForSource(tx, input.source.id);
-    const { links, projectIdsByKey } = await mergeEntities(tx, input.extraction);
+    const { links, projectIdsByKey } = await mergeEntities(tx, input.extraction, input.source.sourceType);
 
     await replaceSourceRelationships(tx, input.source.id, links);
     await replaceSourceChunks(tx, input.source.id, buildChunkRows(input.source, input.chunks, input.extraction, projectIdsByKey));

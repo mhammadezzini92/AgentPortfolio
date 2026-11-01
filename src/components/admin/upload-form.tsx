@@ -44,7 +44,8 @@ export function UploadForm({ maxMb }: { maxMb: number }) {
       <div className="flex gap-2">
         <select name="sourceType" defaultValue="cv" className="rounded-md border border-zinc-300 bg-transparent px-2 py-1.5 text-sm dark:border-zinc-700">
           <option value="cv">CV</option>
-          <option value="upload">Other document</option>
+          <option value="portfolio">Portfolio (e.g. a page saved as PDF)</option>
+          <option value="upload">Other document (fills gaps only)</option>
         </select>
         <input
           name="title"

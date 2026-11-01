@@ -32,6 +32,10 @@ const openRouterSchema = z.object({
 const chatSchema = z.object({
   CHAT_MAX_INPUT_CHARS: positiveInt(1000),
   CHAT_MAX_OUTPUT_TOKENS: positiveInt(600),
+  CHAT_RATE_LIMIT_PER_MINUTE: positiveInt(10),
+  CHAT_RATE_LIMIT_PER_DAY: positiveInt(100),
+  // Across all visitors: caps daily spend even when abuse is spread over many IPs.
+  CHAT_GLOBAL_DAILY_LIMIT: positiveInt(2000),
   RETRIEVAL_TOP_K: positiveInt(8),
   // Caps the retrieved text sent to the answer model, which keeps per-question cost predictable.
   RETRIEVAL_MAX_CONTEXT_CHARS: positiveInt(6000),

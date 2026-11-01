@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   experienceKey,
+  findSameEngagement,
   mergeExperience,
   mergeProfile,
   mergeProject,
@@ -136,5 +137,36 @@ describe("merging into hand-edited rows", () => {
       skills: ["Go"],
       contactInformation: { email: "me@jane.dev", phone: "123" },
     });
+  });
+});
+
+describe("merging from sources that only fill gaps", () => {
+  it("keeps existing values and lists, filling only empty fields", () => {
+    const merged = mergeProfile(
+      { id: 1, fullName: "Jane Doe", title: "Senior Engineer", location: null, skills: ["Go"] },
+      extractedProfile({ fullName: "Jane Doe", title: "Team Lead", location: "Beirut", skills: ["Rust"] }),
+      { fillOnly: true },
+    );
+    expect(merged).toMatchObject({ title: "Senior Engineer", location: "Beirut", skills: ["Go"] });
+  });
+
+  it("still creates entities that don't exist yet", () => {
+    expect(mergeProject(undefined, extractedProject({ description: "New" }), { fillOnly: true })).toMatchObject({ name: "Ledger", description: "New" });
+  });
+});
+
+describe("findSameEngagement", () => {
+  const stored = [
+    { company: "Hakuro", position: "Senior Backend Engineer (Contract)", startDate: "2025-08" },
+    { company: "Nifty Craft", position: "Backend Technical Lead", startDate: "2022-02" },
+  ];
+
+  it("matches a differently titled role at the same employer and start month", () => {
+    expect(findSameEngagement(stored, { company: "hakuro ", startDate: "2025-08" })?.position).toBe("Senior Backend Engineer (Contract)");
+  });
+
+  it("doesn't match without a start date or on a different start", () => {
+    expect(findSameEngagement(stored, { company: "Hakuro", startDate: null })).toBeUndefined();
+    expect(findSameEngagement(stored, { company: "Hakuro", startDate: "2024-01" })).toBeUndefined();
   });
 });

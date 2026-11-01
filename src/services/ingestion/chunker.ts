@@ -65,19 +65,24 @@ function splitIntoParagraphs(lines: string[]): string[] {
   return paragraphs;
 }
 
-// Last resort for a single paragraph longer than the limit: cut on line breaks,
-// then sentence ends, then whitespace, so words are never split.
+function lastMatchIndex(text: string, pattern: RegExp): number {
+  let last = -1;
+  for (const match of text.matchAll(pattern)) last = match.index;
+  return last;
+}
+
+// Cut points in order of preference. PDF text wraps lines mid-sentence, so a bare line
+// break isn't a logical boundary; a bullet start or a sentence ending a line is.
+const CUT_PATTERNS = [/\n(?=\s*(?:[•▪◦‣*–-]|\d+[.)])\s)/g, /(?<=[.!?:])\n/g, /\n/g, /\s/g];
+
+// Last resort for a single paragraph longer than the limit; words are never split.
 function splitOversized(paragraph: string, maxChars: number): string[] {
   const pieces: string[] = [];
   let rest = paragraph;
   while (rest.length > maxChars) {
     const window = rest.slice(0, maxChars);
-    const cut = Math.max(
-      window.lastIndexOf("\n"),
-      window.search(/[.!?]\s[^.!?]*$/) + 1,
-      window.lastIndexOf(" "),
-    );
-    const end = cut > maxChars / 2 ? cut : maxChars;
+    const cut = CUT_PATTERNS.map((pattern) => lastMatchIndex(window, pattern)).find((index) => index > maxChars / 2);
+    const end = cut ?? maxChars;
     pieces.push(rest.slice(0, end).trim());
     rest = rest.slice(end).trim();
   }

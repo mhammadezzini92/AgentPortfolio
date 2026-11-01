@@ -12,7 +12,7 @@ import { hasExpectedFileSignature, uploadFileSchema } from "@/utils/validation";
 export const maxDuration = 120;
 
 const uploadFieldsSchema = z.object({
-  sourceType: z.enum(["cv", "upload"]).default("cv"),
+  sourceType: z.enum(["cv", "portfolio", "upload"]).default("cv"),
   title: z.string().trim().min(1).max(200).nullable().default(null),
 });
 

@@ -6,7 +6,7 @@ import type { IngestionJob, KnowledgeSource, SourceType } from "@/models/schemas
 import { chunkDocument } from "@/services/ingestion/chunker";
 import type { ExtractedContent } from "@/services/ingestion/content-extractor";
 import { parseDocument } from "@/services/ingestion/document-parser";
-import { fetchPublicDocument } from "@/services/ingestion/url-fetcher";
+import { loadWebPage } from "@/services/ingestion/web-page-loader";
 import { persistIngestion } from "@/services/knowledge/knowledge-service";
 import { completeJob, failJob, insertProcessingJob } from "@/services/knowledge/job-repository";
 import {
@@ -88,10 +88,7 @@ async function loadContent(source: KnowledgeSource): Promise<ExtractedContent> {
     if (!mime) throw new Error("Stored file is neither PDF nor DOCX");
     return parseDocument(bytes, mime);
   }
-  if (source.sourceUrl) {
-    const fetched = await fetchPublicDocument(source.sourceUrl);
-    return parseDocument(fetched.body, fetched.contentType);
-  }
+  if (source.sourceUrl) return loadWebPage(source.sourceUrl);
   throw new Error("Source has neither a stored file nor a URL");
 }
 
