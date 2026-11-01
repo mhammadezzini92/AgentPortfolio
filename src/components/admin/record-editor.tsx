@@ -119,7 +119,7 @@ export function RecordEditor({ tableName, recordId, fields, initialValues, expec
   }
 
   async function remove() {
-    if (!window.confirm("Delete this row? Its source links are removed too; chunks keep their text.")) return;
+    if (!window.confirm("Delete this row? Reprocessing won't re-create it (undo under Data → Suppressed). Its source links go too; chunks keep their text.")) return;
     setBusy(true);
     const failure = await callAdminApi(`/api/admin/data/${tableName}/${recordId}`, { method: "DELETE" });
     setBusy(false);

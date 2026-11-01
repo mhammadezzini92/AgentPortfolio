@@ -19,6 +19,7 @@ import {
   projectEditSchema,
   sourceEditSchema,
 } from "@/services/data-admin/edit-schemas";
+import { deleteSuppression } from "@/services/knowledge/suppression-repository";
 
 export type WriteOutcome =
   | { status: "saved"; id: number }
@@ -108,7 +109,11 @@ export async function createRecord(tableName: string, values: unknown): Promise<
 }
 
 export async function deleteRecord(tableName: string, id: number): Promise<WriteOutcome> {
-  const entityType = tableName === "projects" ? "project" : tableName === "experiences" ? "experience" : null;
-  if (!entityType) return { status: "not_allowed" };
-  return (await deleteEntityWithLinks(entityType, id)) ? { status: "saved", id } : { status: "not_found" };
+  const deleted =
+    tableName === "projects" ? await deleteEntityWithLinks("project", id)
+    : tableName === "experiences" ? await deleteEntityWithLinks("experience", id)
+    : tableName === "entity_suppressions" ? await deleteSuppression(id)
+    : null;
+  if (deleted === null) return { status: "not_allowed" };
+  return deleted ? { status: "saved", id } : { status: "not_found" };
 }

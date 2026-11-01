@@ -4,6 +4,7 @@ import {
   PROVENANCES,
   SOURCE_TYPES,
   chatQuestions,
+  entitySuppressions,
   experiences,
   ingestionJobs,
   knowledgeChunks,
@@ -43,6 +44,8 @@ export type DataTableSpec = {
   canCreate: boolean;
   canDelete: boolean;
   editNote?: string;
+  // For read-only tables whose rows may still be removed from the list view.
+  rowDelete?: { label: string; confirmText: string };
 };
 
 const REPROCESS_NOTE = "Hand-edited rows are kept as you wrote them: reprocessing only fills fields you left empty, and deleting a source never removes them.";
@@ -236,6 +239,26 @@ const TABLE_SPECS: DataTableSpec[] = [
     editFields: null,
     canCreate: false,
     canDelete: false,
+  },
+  {
+    name: "entity_suppressions",
+    label: "Suppressed",
+    description: "Projects and roles you deleted. Reprocessing won't re-create them; remove a row to allow it again.",
+    table: entitySuppressions,
+    orderBy: entitySuppressions.id,
+    listColumns: [
+      { key: "entityType", label: "Type" },
+      { key: "label", label: "Deleted entry" },
+      { key: "createdAt", label: "Deleted at" },
+    ],
+    searchColumns: [entitySuppressions.label],
+    editFields: null,
+    canCreate: false,
+    canDelete: true,
+    rowDelete: {
+      label: "Allow again",
+      confirmText: "Allow this entry again? The next reprocess of a source that mentions it will re-create it.",
+    },
   },
   {
     name: "chat_questions",

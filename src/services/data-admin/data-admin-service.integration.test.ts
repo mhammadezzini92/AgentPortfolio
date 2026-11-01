@@ -13,7 +13,7 @@ process.env.TURSO_DATABASE_URL = `file:${join(tempDir, "test.db")}`;
 // Imported after the env is set, because lib/db reads it at module load.
 const { db } = await import("@/lib/db");
 const { migrate } = await import("drizzle-orm/libsql/migrator");
-const { knowledgeChunks, projects, sourceRelationships } = await import("@/models/schemas");
+const { entitySuppressions, knowledgeChunks, projects, sourceRelationships } = await import("@/models/schemas");
 const dataAdmin = await import("@/services/data-admin/data-admin-service");
 const knowledge = await import("@/services/knowledge/knowledge-service");
 const sources = await import("@/services/knowledge/source-repository");
@@ -156,5 +156,23 @@ describe("editing knowledge by hand", () => {
     expect(await db.select().from(sourceRelationships).where(eq(sourceRelationships.entityId, created.id)).all()).toHaveLength(0);
     expect((await db.select().from(knowledgeChunks).where(eq(knowledgeChunks.id, chunk.id)).get())!.projectId).toBeNull();
     expect(await dataAdmin.deleteRecord("projects", created.id)).toEqual({ status: "not_found" });
+  });
+
+  it("keeps a deleted project deleted across reprocessing until the suppression is removed", async () => {
+    const sourceId = (await sources.insertSource({ sourceType: "portfolio", title: "Site" })).id;
+    const withNova = { ...extraction(), projects: [project({ name: "Nova" })], chunkLabels: [] };
+    await ingest(sourceId, "hash-nova-1", "Built Nova", withNova);
+    const nova = (await db.select().from(projects).where(eq(projects.name, "Nova")).get())!;
+
+    expect(await dataAdmin.deleteRecord("projects", nova.id)).toEqual({ status: "saved", id: nova.id });
+    const suppression = (await db.select().from(entitySuppressions).where(eq(entitySuppressions.label, "Nova")).get())!;
+    expect(suppression).toMatchObject({ entityType: "project", matchKey: "nova", label: "Nova" });
+
+    await ingest(sourceId, "hash-nova-2", "Built Nova again", withNova);
+    expect(await db.select().from(projects).where(eq(projects.name, "Nova")).get()).toBeUndefined();
+
+    expect(await dataAdmin.deleteRecord("entity_suppressions", suppression.id)).toMatchObject({ status: "saved" });
+    await ingest(sourceId, "hash-nova-3", "Built Nova once more", withNova);
+    expect(await db.select().from(projects).where(eq(projects.name, "Nova")).get()).toBeDefined();
   });
 });

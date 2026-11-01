@@ -1,8 +1,8 @@
 import "server-only";
 import { type SQL, and, asc, desc, eq, like, or } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { type Transaction, db } from "@/lib/db";
 import {
-  type EntityType,
+  type SuppressibleEntityType,
   experiences,
   knowledgeChunks,
   knowledgeSources,
@@ -12,6 +12,8 @@ import {
 } from "@/models/schemas";
 import type { ChunkEdit, ExperienceEdit, ProfileEdit, ProjectEdit, SourceEdit } from "@/services/data-admin/edit-schemas";
 import type { DataTableSpec } from "@/services/data-admin/table-specs";
+import { experienceKey, projectKey } from "@/services/knowledge/entity-merge";
+import { insertSuppression } from "@/services/knowledge/suppression-repository";
 import { sha256Hex } from "@/utils/text";
 
 export type TableRow = Record<string, unknown>;
@@ -128,13 +130,27 @@ export async function updateSourceIfUnchanged(id: number, values: SourceEdit, ex
 
 // source_relationships points at entities polymorphically (no foreign key), so the links
 // go in the same transaction; chunks keep their text and lose the project via ON DELETE SET NULL.
-export async function deleteEntityWithLinks(entityType: Extract<EntityType, "project" | "experience">, id: number): Promise<boolean> {
-  const table = entityType === "project" ? projects : experiences;
+// The suppression stops the next extraction from re-creating what the admin removed.
+export async function deleteEntityWithLinks(entityType: SuppressibleEntityType, id: number): Promise<boolean> {
   return db.transaction(async (tx) => {
+    const suppression = await suppressionFor(tx, entityType, id);
+    if (!suppression) return false;
+
     await tx
       .delete(sourceRelationships)
       .where(and(eq(sourceRelationships.entityType, entityType), eq(sourceRelationships.entityId, id)));
-    const deleted = await tx.delete(table).where(eq(table.id, id)).returning({ id: table.id });
-    return deleted.length > 0;
+    if (entityType === "project") await tx.delete(projects).where(eq(projects.id, id));
+    else await tx.delete(experiences).where(eq(experiences.id, id));
+    await insertSuppression(tx, suppression);
+    return true;
   });
+}
+
+async function suppressionFor(tx: Transaction, entityType: SuppressibleEntityType, id: number) {
+  if (entityType === "project") {
+    const project = await tx.select({ name: projects.name }).from(projects).where(eq(projects.id, id)).get();
+    return project && { entityType, matchKey: projectKey(project.name), label: project.name };
+  }
+  const role = await tx.select({ company: experiences.company, position: experiences.position }).from(experiences).where(eq(experiences.id, id)).get();
+  return role && { entityType, matchKey: experienceKey(role.company, role.position), label: `${role.position} at ${role.company}` };
 }

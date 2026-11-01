@@ -26,6 +26,7 @@ import {
   upsertProfile,
 } from "@/services/knowledge/entity-repository";
 import { completeJob } from "@/services/knowledge/job-repository";
+import { listSuppressedKeys, suppressionId } from "@/services/knowledge/suppression-repository";
 import { DEFAULT_PROVENANCE, sourceTypeOverwritesFacts } from "@/services/knowledge/provenance";
 import { deleteIdleSource, findSourceById, setSourceStatus } from "@/services/knowledge/source-repository";
 import { sha256Hex } from "@/utils/text";
@@ -36,6 +37,7 @@ async function mergeEntities(tx: Transaction, extraction: KnowledgeExtraction, s
   const links: EntityLink[] = [];
   const projectIdsByKey = new Map<string, number>();
   const options = { fillOnly: !sourceTypeOverwritesFacts(sourceType) };
+  const suppressed = await listSuppressedKeys(tx);
 
   if (extraction.profile) {
     const merged = mergeProfile(await getProfile(tx), extraction.profile, options);
@@ -48,6 +50,7 @@ async function mergeEntities(tx: Transaction, extraction: KnowledgeExtraction, s
   const storedProjects = new Map<string, NewProject>((await listProjects(tx)).map((p) => [projectKey(p.name), p]));
   for (const incoming of extraction.projects) {
     const key = projectKey(incoming.name);
+    if (suppressed.has(suppressionId("project", key))) continue;
     const existing = storedProjects.get(key);
     const merged = mergeProject(existing, incoming, options);
     const id = await saveProject(tx, existing?.id, merged);
@@ -62,6 +65,7 @@ async function mergeEntities(tx: Transaction, extraction: KnowledgeExtraction, s
   );
   for (const incoming of extraction.experiences) {
     const key = experienceKey(incoming.company, incoming.position);
+    if (suppressed.has(suppressionId("experience", key))) continue;
     const existing = storedExperiences.get(key) ?? findSameEngagement(storedExperiences.values(), incoming);
     const merged = mergeExperience(existing, incoming, options);
     const id = await saveExperience(tx, existing?.id, merged);

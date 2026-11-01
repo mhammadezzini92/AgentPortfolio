@@ -33,6 +33,7 @@ export const PROVENANCES = ["personal", "general", "unverified"] as const;
 export const ENTITY_TYPES = ["profile", "project", "experience"] as const;
 export const LLM_OPERATIONS = ["extraction", "answer"] as const;
 export const CHAT_OUTCOMES = ["answered", "no_context", "failed"] as const;
+export const SUPPRESSIBLE_ENTITY_TYPES = ["project", "experience"] as const;
 
 // Drizzle's SQLite enums are TypeScript-only; this makes the database reject unknown values too.
 // Values are compile-time constants, so inlining them as literals is safe.
@@ -45,6 +46,7 @@ export type Provenance = (typeof PROVENANCES)[number];
 export type EntityType = (typeof ENTITY_TYPES)[number];
 export type LlmOperation = (typeof LLM_OPERATIONS)[number];
 export type ChatOutcome = (typeof CHAT_OUTCOMES)[number];
+export type SuppressibleEntityType = (typeof SUPPRESSIBLE_ENTITY_TYPES)[number];
 
 // Stored as unix seconds; Drizzle maps them to Date in app code.
 const createdAt = () =>
@@ -221,6 +223,24 @@ export const llmUsage = sqliteTable(
   ],
 );
 
+// Projects and roles the admin deleted. Ingestion skips extracted entities with the same
+// match key (the merge key from entity-merge), so a deletion survives reprocessing.
+// Deleting a row here lets the entity come back on the next extraction.
+export const entitySuppressions = sqliteTable(
+  "entity_suppressions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    entityType: text("entity_type", { enum: SUPPRESSIBLE_ENTITY_TYPES }).notNull(),
+    matchKey: text("match_key").notNull(),
+    label: text("label").notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("entity_suppressions_unique").on(table.entityType, table.matchKey),
+    check("entity_suppressions_entity_type_check", isOneOf(table.entityType, SUPPRESSIBLE_ENTITY_TYPES)),
+  ],
+);
+
 // Visitor questions, kept 30 days so the admin can see what the agent couldn't answer.
 // No IP or other visitor identifiers are stored. outcome "no_context" means the model was
 // skipped because nothing matched; a zero retrieved_chunk_count flags likely gaps.
@@ -265,3 +285,4 @@ export type LlmUsage = typeof llmUsage.$inferSelect;
 export type NewLlmUsage = typeof llmUsage.$inferInsert;
 export type ChatQuestion = typeof chatQuestions.$inferSelect;
 export type NewChatQuestion = typeof chatQuestions.$inferInsert;
+export type EntitySuppression = typeof entitySuppressions.$inferSelect;

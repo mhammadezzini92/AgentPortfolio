@@ -1,6 +1,7 @@
 import Form from "next/form";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { DeleteRowButton } from "@/components/admin/delete-row-button";
 import { requireAdminSession } from "@/lib/auth";
 import { type TableRow, listTableRows } from "@/services/data-admin/data-admin-repository";
 import { type ListColumn, findTableSpec } from "@/services/data-admin/table-specs";
@@ -69,7 +70,10 @@ export async function DataTableView({ tableName, page, filter }: Props) {
       <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
         <table className="w-full text-left text-sm">
           <thead className="bg-zinc-50 text-xs uppercase text-zinc-500 dark:bg-zinc-900">
-            <tr>{spec.listColumns.map((column) => <th key={column.key} className="whitespace-nowrap px-3 py-2">{column.label}</th>)}</tr>
+            <tr>
+              {spec.listColumns.map((column) => <th key={column.key} className="whitespace-nowrap px-3 py-2">{column.label}</th>)}
+              {spec.rowDelete && <th className="px-3 py-2" />}
+            </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
             {rows.map((row, index) => {
@@ -85,6 +89,11 @@ export async function DataTableView({ tableName, page, filter }: Props) {
                       )}
                     </td>
                   ))}
+                  {spec.rowDelete && typeof row.id === "number" && (
+                    <td className="px-3 py-2 text-right">
+                      <DeleteRowButton tableName={spec.name} rowId={row.id} label={spec.rowDelete.label} confirmText={spec.rowDelete.confirmText} />
+                    </td>
+                  )}
                 </tr>
               );
             })}
